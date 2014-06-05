@@ -2,19 +2,75 @@
 
 
 ## Loading and preprocessing the data
-
+```{r}
+#it is supposed that folder 'activity' is unzipped
+activity<-read.csv("activity/activity.csv",colClasses=c("integer","Date","integer"))
+head(activity)
+```
 
 
 ## What is mean total number of steps taken per day?
 
+```{r meanTotalNumber, fig.height=4 }
+library(ggplot2)
+activityNoNa<-activity[!is.na(activity$steps),]
+r1<-tapply(activityNoNa$steps,activityNoNa$date,sum)
+
+stepsMean<-format(round(mean(r1),digits=2),scientific=F)
+stepsMedian<-format(median(r1),scientific=F)
+
+ggplot(NULL,aes(x=r1))+geom_histogram(binwidth=1000,fill="white",color="blue")+labs(x="total number of steps per day",title="Histogram of total number of steps per day")
+```
+
+The mean of total number of steps taken per day is `r stepsMean` while the median is equal to `r stepsMedian`.
 
 
 ## What is the average daily activity pattern?
+```{r averageDaily, fig.width=10, fig.height=4}
+r2<-tapply(activity$steps,activity$interval,mean,na.rm=T)
 
+intervalMax<-names(which.max(r2))
+valueMax<-round(r2[[intervalMax]],digits=2)
 
+ggplot(NULL,aes(x=unique(activity$interval),y=r2))+geom_line(color="blue",type="l")+labs(x="interval number",y="average number of steps",title="average number of steps per interval")
+```
 
+`r intervalMax`-th 5-minutes interval contains the maximum number (`r valueMax`) of steps averaged across all days.
 ## Imputing missing values
+```{r}
+naNumber<-nrow(activity)-nrow(na.omit(activity))
+naPerDay<-tapply(activity$steps,activity$date,function(x){length(x[is.na(x)])})
+uniqNaPerDay<-unique(as.vector(naPerDay))
+naDays<-length(naPerDay[naPerDay==288])
+```
+The total number of missing values in dataset is `r naNumber`. Moreover, if we calculate the number of steps with NA value per day we will found that this number is equal either `r uniqNaPerDay[1]` or `r uniqNaPerDay[2]`. This means that there are `r naNumber`/288=`r naDays` days with complitelly missed step values and the other days have no missed values. Let's replace  each missed steps value with the mean of steps values for its interval over all days. 
 
+```{r missingValues, fig.height=4}
+activityFilled<-activity
+# when filling missing step values let's take advantage of the circumstances that 
+# there are 8 days with complitelly missed step values and the other days have
+# no missed values
+activityFilled$steps[is.na(activity$steps)]<-r2
 
+r3<-tapply(activityFilled$steps,activityFilled$date,sum,na.rm=T)
+stepsMean3<-format(round(mean(r3),digits=2),scientific=F)
+stepsMedian3<-format(median(r3),scientific=F)
+
+ggplot(NULL,aes(x=r3))+geom_histogram(binwidth=1000,fill="white",color="blue")+labs(x="total number of steps per day",title="Histogram of total number of steps per day with filled NA values")
+```
+Now the mean of total number of steps taken per day is `r stepsMean3` and the median is equal to the same number `r stepsMedian3`. Comparing the histograms with NA values presented and Na values replaced one can see that the number of days with total steps in the interval  1000-1100  increased from 10 to 18. 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r difference, fig.width=10, fig.height=8}
+Sys.setlocale("LC_TIME","English United States")
+activityFilled$day<-apply(activityFilled,1,function(row){if(weekdays(as.Date(row[2])) %in% c("Sunday","Saturday")) {"weekend"} else {"weekday"}})
+
+r4<-tapply(activityFilled$steps,list(activityFilled$day,activityFilled$interval),mean)
+
+dataWeekday<-data.frame(interval=unique(activityFilled$interval),meanSteps=r4["weekday",],day="weekday")
+
+dataWeekend<-data.frame(interval=unique(activityFilled$interval),meanSteps=r4["weekend",],day="weekend")
+
+data<-rbind(dataWeekday,dataWeekend)
+ggplot(data,aes(x=interval,y=meanSteps))+geom_line(color="blue",type="l")+labs(x="interval number",y="average number of steps",title="average number of steps per interval for weekdays and weekends")+facet_wrap(~day,nrow=2,ncol=1)
+```
